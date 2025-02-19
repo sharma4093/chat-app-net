@@ -53,7 +53,7 @@ const SignUp = () => {
 
 
   //  const BACKEND_URL = "http://localhost:4545/"
-   const BACKEND_URL = "https://chat-phi-lake-18.vercel.app/"
+   const BACKEND_URL = "https://chat-phi-lake-18.vercel.app/api/signup"
   const handleChange = (e) => {
     setFormData({
       ...formData,

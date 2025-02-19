@@ -8,7 +8,7 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 //  const BACKEND_URL = "http://localhost:4545/"
- const BACKEND_URL = "https://chat-phi-lake-18.vercel.app/"
+ const BACKEND_URL = "https://chat-phi-lake-18.vercel.app/api/login"
 
 
   const handleChange = (e) => {
