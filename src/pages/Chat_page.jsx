@@ -35,7 +35,7 @@ const Chat = () => {
       return;
     }
 
-    socketRef.current = io(BACKEND_URL, {
+    socketRef.current = io("https://chat-phi-lake-18.vercel.app", {
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000
