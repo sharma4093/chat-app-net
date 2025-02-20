@@ -105,13 +105,21 @@ const Chat = () => {
     try {
       if (!currentUser?._id) return;
       
-      const response = await fetch(`${BACKEND_URL}/api/unread-count/${currentUser._id}`{
-        method: 'GET',
-        credentials: 'include', // Allow cookies/session
+      // const response = await fetch(`${BACKEND_URL}/api/unread-count/${currentUser._id}`{
+      //   method: 'GET',
+      //   credentials: 'include', // Allow cookies/session
+      //   headers: {
+      //     'Content-Type': 'application/json'
+      //   }
+      // });
+      const response = await fetch(`${BACKEND_URL}/api/unread-count/${currentUser._id}`, {
+        method: "GET",
+        credentials: "include", // Include cookies/session
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json"
         }
       });
+      
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const counts = await response.json();
       const countsMap = counts.reduce((acc, { _id, count }) => {
