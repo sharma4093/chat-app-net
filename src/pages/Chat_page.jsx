@@ -1,236 +1,26 @@
-import { useState, useEffect, useRef } from 'react';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import io from 'socket.io-client';
-import { useNavigate } from 'react-router-dom';
-
-// const BACKEND_URL = "https://chat-prashant-sharmas-projects-5c78faa6.vercel.";
-// const BACKEND_URL = "http://localhost:4545";
-const BACKEND_URL = "https://chat-server-application.onrender.com"
-
-const Chat = () => {
-  const user = JSON.parse(localStorage.getItem("user"));
-  const [messages, setMessages] = useState([]);
-  const navigate = useNavigate();
-  const [onlineUsers, setOnlineUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [newMessage, setNewMessage] = useState('');
-  const [currentUser, setCurrentUser] = useState(user);
-  const [unreadCounts, setUnreadCounts] = useState({});
-  const messagesEndRef = useRef(null);
-  const socketRef = useRef(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filteredUsers, setFilteredUsers] = useState([]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  useEffect(() => {
-    if (!currentUser?._id || !currentUser?.name) {
-      navigate('/login');
-      return;
-    }
-
-    // socketRef.current = io(BACKEND_URL, {
-    socketRef.current = io("https://chat-phi-lake-18.vercel.app", {
-      transports: ['websocket','polling'],
-      withCredentials: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    });
-
-    socketRef.current.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
-    });
-
-    socketRef.current.on('connect', () => {
-      socketRef.current.emit('user_connected', {
-        userId: currentUser._id,
-        userName: currentUser.name
-      });
-    });
-
-    fetchUnreadCounts();
-
-    socketRef.current.on('users_online', (users) => {
-      const otherUsers = users.filter(user => user.userId !== currentUser._id);
-      setOnlineUsers(otherUsers);
-      setFilteredUsers(otherUsers);
-    });
-
-    socketRef.current.on('new_message', ({ message, sender }) => {
-      if (selectedUser && sender === selectedUser.userId) {
-        setMessages(prev => [...prev, message]);
-        socketRef.current.emit('mark_as_read', message._id);
-      } else {
-        setUnreadCounts(prev => ({
-          ...prev,
-          [sender]: (prev[sender] || 0) + 1
-        }));
-      }
-    });
-
-    socketRef.current.on('message_read', (messageId) => {
-      setMessages(prev => 
-        prev.map(msg => 
-          msg._id === messageId ? { ...msg, isRead: true } : msg
-        )
-      );
-    });
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.off('connect_error');
-        socketRef.current.off('connect');
-        socketRef.current.off('users_online');
-        socketRef.current.off('new_message');
-        socketRef.current.off('message_read');
-        socketRef.current.disconnect();
-      }
-    };
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (selectedUser) {
-      loadChatHistory(selectedUser.userId);
-    }
-  }, [selectedUser]);
-
-  const fetchUnreadCounts = async () => {
-    try {
-      if (!currentUser?._id) return;
-      
-      // const response = await fetch(`${BACKEND_URL}/api/unread-count/${currentUser._id}`{
-      //   method: 'GET',
-      //   credentials: 'include', // Allow cookies/session
-      //   headers: {
-      //     'Content-Type': 'application/json'
-      //   }
-      // });
-      const response = await fetch(`${BACKEND_URL}/api/unread-count/${currentUser._id}`, {
-        method: "GET",
-        credentials: "include", // Include cookies/session
-        headers: {
-          "Content-Type": "application/json"
-        }
-      });
-      
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const counts = await response.json();
-      const countsMap = counts.reduce((acc, { _id, count }) => {
-        acc[_id] = count;
-        return acc;
-      }, {});
-      setUnreadCounts(countsMap);
-    } catch (error) {
-      console.error('Error fetching unread counts:', error);
-    }
-  };
-
-  const loadChatHistory = async (userId) => {
-    try {
-      if (!currentUser?._id || !userId) return;
-
-      const response = await fetch(`${BACKEND_URL}/api/messages/${currentUser._id}/${userId}`,{
-        method: 'GET',
-        credentials: 'include', // Allow cookies/session
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      setMessages(data);
-      
-      const unreadMessages = data.filter(msg => !msg.isRead && msg.sender === userId);
-      unreadMessages.forEach(msg => {
-        socketRef.current.emit('mark_as_read', msg._id);
-      });
-
-      setUnreadCounts(prev => ({...prev, [userId]: 0}));
-    } catch (error) {
-      console.error('Error loading chat history:', error);
-    }
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (newMessage.trim() && selectedUser) {
-      const messageData = {
-        senderId: currentUser._id,
-        receiverId: selectedUser.userId,
-        content: newMessage
-      };
-      
-      socketRef.current.emit('private_message', messageData);
-      
-      const optimisticMessage = {
-        _id: Date.now().toString(),
-        sender: currentUser._id,
-        receiver: selectedUser.userId,
-        content: newMessage,
-        isRead: false,
-        createdAt: new Date()
-      };
-      
-      setMessages(prev => [...prev, optimisticMessage]);
-      setNewMessage('');
-    }
-  };
-
-  const handleSearch = (e) => {
-    const searchValue = e.target.value;
-    setSearchTerm(searchValue);
-    
-    const results = onlineUsers.filter(user => 
-      user.userName.toLowerCase().includes(searchValue.toLowerCase())
-    );
-    setFilteredUsers(results);
-  };
-
-  const handleLogout = () => {
-    socketRef.current?.disconnect();
-    localStorage.clear();
-    navigate('/login');
-  };
 // import { useState, useEffect, useRef } from 'react';
 // import 'bootstrap/dist/css/bootstrap.min.css';
 // import io from 'socket.io-client';
-// import { Button, Badge } from 'react-bootstrap';
 // import { useNavigate } from 'react-router-dom';
-// // import { BACKEND_URL } from '../config/config';
+
+// // const BACKEND_URL = "https://chat-prashant-sharmas-projects-5c78faa6.vercel.";
+// // const BACKEND_URL = "http://localhost:4545";
+// const BACKEND_URL = "https://chat-server-application.onrender.com"
 
 // const Chat = () => {
-//   // State management for messages, users, and current chat
-  
-//   const user = JSON.parse(localStorage.getItem("user")); // Get user from localStorage
-//   const userNameLocal = user?.name; // Get name from user object
-//   const userIdLocal = user?._id; // Get _id from user object
-//   const [userName, setUserName] = useState(userNameLocal);
-//   const [userId, setUserId] = useState(userIdLocal);
+//   const user = JSON.parse(localStorage.getItem("user"));
 //   const [messages, setMessages] = useState([]);
-//     const [searchTerm, setSearchTerm] = useState('');
-//       const [filteredUsers, setFilteredUsers] = useState([]);
-  
 //   const navigate = useNavigate();
-//   const [onlineUsers, setOnlineUsers] = useState([]); // Will now store full user objects
-//   const [selectedUser, setSelectedUser] = useState(null); // Changed to null initially
+//   const [onlineUsers, setOnlineUsers] = useState([]);
+//   const [selectedUser, setSelectedUser] = useState(null);
 //   const [newMessage, setNewMessage] = useState('');
-//   const [currentUser, setCurrentUser] = useState(user); // Use the user from localStorage
+//   const [currentUser, setCurrentUser] = useState(user);
 //   const [unreadCounts, setUnreadCounts] = useState({});
-//   const messagesEndRef = useRef(null); // For auto-scrolling
-//   const socketRef = useRef(null); // For persistent socket reference
+//   const messagesEndRef = useRef(null);
+//   const socketRef = useRef(null);
+//   const [searchTerm, setSearchTerm] = useState('');
+//   const [filteredUsers, setFilteredUsers] = useState([]);
 
-
-//   // const BACKEND_URL = "http://localhost:4545"
-//   const BACKEND_URL = "https://chat-server-application.onrender.com"
-  
-//   // Auto-scroll to bottom of messages
 //   const scrollToBottom = () => {
 //     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 //   };
@@ -241,52 +31,43 @@ const Chat = () => {
 
 //   useEffect(() => {
 //     if (!currentUser?._id || !currentUser?.name) {
-//       console.log('No user data available:', currentUser);
 //       navigate('/login');
 //       return;
 //     }
 
-//     // Initialize socket connection
-//     socketRef.current = io(BACKEND_URL, {
-//       withCredentials:true,
+//     // socketRef.current = io(BACKEND_URL, {
+//     socketRef.current = io("https://chat-phi-lake-18.vercel.app", {
+//       transports: ['websocket','polling'],
+//       withCredentials: true,
 //       reconnection: true,
 //       reconnectionAttempts: 5,
 //       reconnectionDelay: 1000
 //     });
 
-//     // Handle socket connection errors
 //     socketRef.current.on('connect_error', (error) => {
 //       console.error('Socket connection error:', error);
 //     });
 
 //     socketRef.current.on('connect', () => {
-//       console.log('Socket connected successfully');
-//       // Connect to socket with both id and name
 //       socketRef.current.emit('user_connected', {
 //         userId: currentUser._id,
 //         userName: currentUser.name
 //       });
 //     });
 
-//     // Load unread counts
 //     fetchUnreadCounts();
 
-//     // Socket listeners
 //     socketRef.current.on('users_online', (users) => {
-//       console.log('Received online users:', users);
-//       // Filter out current user and store full user objects
 //       const otherUsers = users.filter(user => user.userId !== currentUser._id);
-//       setOnlineUsers(users.filter(user => user.userId !== currentUser._id));
+//       setOnlineUsers(otherUsers);
 //       setFilteredUsers(otherUsers);
 //     });
 
 //     socketRef.current.on('new_message', ({ message, sender }) => {
-//       console.log('Received new message:', message, 'from:', sender);
 //       if (selectedUser && sender === selectedUser.userId) {
 //         setMessages(prev => [...prev, message]);
 //         socketRef.current.emit('mark_as_read', message._id);
 //       } else {
-//         // Update unread count for sender
 //         setUnreadCounts(prev => ({
 //           ...prev,
 //           [sender]: (prev[sender] || 0) + 1
@@ -295,7 +76,6 @@ const Chat = () => {
 //     });
 
 //     socketRef.current.on('message_read', (messageId) => {
-//       console.log('Message marked as read:', messageId);
 //       setMessages(prev => 
 //         prev.map(msg => 
 //           msg._id === messageId ? { ...msg, isRead: true } : msg
@@ -315,7 +95,6 @@ const Chat = () => {
 //     };
 //   }, [currentUser]);
 
-//   // Separate useEffect for selectedUser changes
 //   useEffect(() => {
 //     if (selectedUser) {
 //       loadChatHistory(selectedUser.userId);
@@ -326,10 +105,22 @@ const Chat = () => {
 //     try {
 //       if (!currentUser?._id) return;
       
-//       const response = await fetch(`${BACKEND_URL}/api/unread-count/${currentUser._id}`);
-//       if (!response.ok) {
-//         throw new Error(`HTTP error! status: ${response.status}`);
-//       }
+//       // const response = await fetch(`${BACKEND_URL}/api/unread-count/${currentUser._id}`{
+//       //   method: 'GET',
+//       //   credentials: 'include', // Allow cookies/session
+//       //   headers: {
+//       //     'Content-Type': 'application/json'
+//       //   }
+//       // });
+//       const response = await fetch(`${BACKEND_URL}/api/unread-count/${currentUser._id}`, {
+//         method: "GET",
+//         credentials: "include", // Include cookies/session
+//         headers: {
+//           "Content-Type": "application/json"
+//         }
+//       });
+      
+//       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 //       const counts = await response.json();
 //       const countsMap = counts.reduce((acc, { _id, count }) => {
 //         acc[_id] = count;
@@ -345,42 +136,26 @@ const Chat = () => {
 //     try {
 //       if (!currentUser?._id || !userId) return;
 
-//       const response = await fetch(`${BACKEND_URL}/api/messages/${currentUser._id}/${userId}`);
-//       if (!response.ok) {
-//         throw new Error(`HTTP error! status: ${response.status}`);
-//       }
+//       const response = await fetch(`${BACKEND_URL}/api/messages/${currentUser._id}/${userId}`,{
+//         method: 'GET',
+//         credentials: 'include', // Allow cookies/session
+//         headers: {
+//           'Content-Type': 'application/json'
+//         }
+//       });
+//       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 //       const data = await response.json();
-//       console.log('Loaded chat history:', data);
 //       setMessages(data);
       
-//       // Mark messages as read
-//       const unreadMessages = data.filter(msg => 
-//         !msg.isRead && msg.sender === userId
-//       );
-      
+//       const unreadMessages = data.filter(msg => !msg.isRead && msg.sender === userId);
 //       unreadMessages.forEach(msg => {
 //         socketRef.current.emit('mark_as_read', msg._id);
 //       });
 
-//       // Clear unread count for selected user
-//       setUnreadCounts(prev => ({
-//         ...prev,
-//         [userId]: 0
-//       }));
+//       setUnreadCounts(prev => ({...prev, [userId]: 0}));
 //     } catch (error) {
 //       console.error('Error loading chat history:', error);
 //     }
-//   };
-
-
-//     const handleSearch = (e) => {
-//     const searchValue = e.target.value;
-//     setSearchTerm(searchValue);
-    
-//     const results = onlineUsers.filter(user => 
-//       user.userName.toLowerCase().includes(searchValue.toLowerCase())
-//     );
-//     setFilteredUsers(results);
 //   };
 
 //   const handleSubmit = (e) => {
@@ -388,16 +163,14 @@ const Chat = () => {
 //     if (newMessage.trim() && selectedUser) {
 //       const messageData = {
 //         senderId: currentUser._id,
-//         receiverId: selectedUser.userId, // Changed from _id to userId
+//         receiverId: selectedUser.userId,
 //         content: newMessage
 //       };
       
-//       console.log('Sending message:', messageData);
 //       socketRef.current.emit('private_message', messageData);
       
-//       // Optimistically add message to UI
 //       const optimisticMessage = {
-//         _id: Date.now().toString(), // Temporary ID
+//         _id: Date.now().toString(),
 //         sender: currentUser._id,
 //         receiver: selectedUser.userId,
 //         content: newMessage,
@@ -410,13 +183,241 @@ const Chat = () => {
 //     }
 //   };
 
+//   const handleSearch = (e) => {
+//     const searchValue = e.target.value;
+//     setSearchTerm(searchValue);
+    
+//     const results = onlineUsers.filter(user => 
+//       user.userName.toLowerCase().includes(searchValue.toLowerCase())
+//     );
+//     setFilteredUsers(results);
+//   };
+
 //   const handleLogout = () => {
-//     if (socketRef.current) {
-//       socketRef.current.disconnect();
-//     }
+//     socketRef.current?.disconnect();
 //     localStorage.clear();
 //     navigate('/login');
 //   };
+import { useState, useEffect, useRef } from 'react';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import io from 'socket.io-client';
+import { Button, Badge } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
+// import { BACKEND_URL } from '../config/config';
+
+const Chat = () => {
+  // State management for messages, users, and current chat
+  
+  const user = JSON.parse(localStorage.getItem("user")); // Get user from localStorage
+  const userNameLocal = user?.name; // Get name from user object
+  const userIdLocal = user?._id; // Get _id from user object
+  const [userName, setUserName] = useState(userNameLocal);
+  const [userId, setUserId] = useState(userIdLocal);
+  const [messages, setMessages] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
+      const [filteredUsers, setFilteredUsers] = useState([]);
+  
+  const navigate = useNavigate();
+  const [onlineUsers, setOnlineUsers] = useState([]); // Will now store full user objects
+  const [selectedUser, setSelectedUser] = useState(null); // Changed to null initially
+  const [newMessage, setNewMessage] = useState('');
+  const [currentUser, setCurrentUser] = useState(user); // Use the user from localStorage
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const messagesEndRef = useRef(null); // For auto-scrolling
+  const socketRef = useRef(null); // For persistent socket reference
+
+
+  // const BACKEND_URL = "http://localhost:4545"
+  const BACKEND_URL = "https://chat-server-application.onrender.com"
+  
+  // Auto-scroll to bottom of messages
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    if (!currentUser?._id || !currentUser?.name) {
+      console.log('No user data available:', currentUser);
+      navigate('/login');
+      return;
+    }
+
+    // Initialize socket connection
+    socketRef.current = io(BACKEND_URL, {
+      withCredentials:true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    });
+
+    // Handle socket connection errors
+    socketRef.current.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+    });
+
+    socketRef.current.on('connect', () => {
+      console.log('Socket connected successfully');
+      // Connect to socket with both id and name
+      socketRef.current.emit('user_connected', {
+        userId: currentUser._id,
+        userName: currentUser.name
+      });
+    });
+
+    // Load unread counts
+    fetchUnreadCounts();
+
+    // Socket listeners
+    socketRef.current.on('users_online', (users) => {
+      console.log('Received online users:', users);
+      // Filter out current user and store full user objects
+      const otherUsers = users.filter(user => user.userId !== currentUser._id);
+      setOnlineUsers(users.filter(user => user.userId !== currentUser._id));
+      setFilteredUsers(otherUsers);
+    });
+
+    socketRef.current.on('new_message', ({ message, sender }) => {
+      console.log('Received new message:', message, 'from:', sender);
+      if (selectedUser && sender === selectedUser.userId) {
+        setMessages(prev => [...prev, message]);
+        socketRef.current.emit('mark_as_read', message._id);
+      } else {
+        // Update unread count for sender
+        setUnreadCounts(prev => ({
+          ...prev,
+          [sender]: (prev[sender] || 0) + 1
+        }));
+      }
+    });
+
+    socketRef.current.on('message_read', (messageId) => {
+      console.log('Message marked as read:', messageId);
+      setMessages(prev => 
+        prev.map(msg => 
+          msg._id === messageId ? { ...msg, isRead: true } : msg
+        )
+      );
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off('connect_error');
+        socketRef.current.off('connect');
+        socketRef.current.off('users_online');
+        socketRef.current.off('new_message');
+        socketRef.current.off('message_read');
+        socketRef.current.disconnect();
+      }
+    };
+  }, [currentUser]);
+
+  // Separate useEffect for selectedUser changes
+  useEffect(() => {
+    if (selectedUser) {
+      loadChatHistory(selectedUser.userId);
+    }
+  }, [selectedUser]);
+
+  const fetchUnreadCounts = async () => {
+    try {
+      if (!currentUser?._id) return;
+      
+      const response = await fetch(`${BACKEND_URL}/api/unread-count/${currentUser._id}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const counts = await response.json();
+      const countsMap = counts.reduce((acc, { _id, count }) => {
+        acc[_id] = count;
+        return acc;
+      }, {});
+      setUnreadCounts(countsMap);
+    } catch (error) {
+      console.error('Error fetching unread counts:', error);
+    }
+  };
+
+  const loadChatHistory = async (userId) => {
+    try {
+      if (!currentUser?._id || !userId) return;
+
+      const response = await fetch(`${BACKEND_URL}/api/messages/${currentUser._id}/${userId}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log('Loaded chat history:', data);
+      setMessages(data);
+      
+      // Mark messages as read
+      const unreadMessages = data.filter(msg => 
+        !msg.isRead && msg.sender === userId
+      );
+      
+      unreadMessages.forEach(msg => {
+        socketRef.current.emit('mark_as_read', msg._id);
+      });
+
+      // Clear unread count for selected user
+      setUnreadCounts(prev => ({
+        ...prev,
+        [userId]: 0
+      }));
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+    }
+  };
+
+
+    const handleSearch = (e) => {
+    const searchValue = e.target.value;
+    setSearchTerm(searchValue);
+    
+    const results = onlineUsers.filter(user => 
+      user.userName.toLowerCase().includes(searchValue.toLowerCase())
+    );
+    setFilteredUsers(results);
+  };
+
+  const handleSubmit = (e) => {
+    console.log("submit is called")
+    e.preventDefault();
+    if (newMessage.trim() && selectedUser) {
+      const messageData = {
+        senderId: currentUser._id,
+        receiverId: selectedUser.userId, // Changed from _id to userId
+        content: newMessage
+      };
+      
+      console.log('Sending message:', messageData);
+      socketRef.current.emit('private_message', messageData);
+      
+      // Optimistically add message to UI
+      const optimisticMessage = {
+        _id: Date.now().toString(), // Temporary ID
+        sender: currentUser._id,
+        receiver: selectedUser.userId,
+        content: newMessage,
+        isRead: false,
+        createdAt: new Date()
+      };
+      
+      setMessages(prev => [...prev, optimisticMessage]);
+      setNewMessage('');
+    }
+  };
+
+  const handleLogout = () => {
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+    localStorage.clear();
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen w-screen flex flex-col bg-gray-100">
