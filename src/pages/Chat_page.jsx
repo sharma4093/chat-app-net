@@ -227,7 +227,8 @@ const Chat = () => {
   const socketRef = useRef(null); // For persistent socket reference
 
 
-  const BACKEND_URL = "http://localhost:4545"
+  // const BACKEND_URL = "http://localhost:4545"
+  const BACKEND_URL = "https://chat-phi-lake-18.vercel.app"
   
   // Auto-scroll to bottom of messages
   const scrollToBottom = () => {
