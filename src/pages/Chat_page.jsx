@@ -526,16 +526,21 @@ const Chat = () => {
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="Type your message..."
-                    className="flex-1 px-3 py-1.5 md:px-4 md:py-2 rounded-full border shadow-md text-white focus:outline-none focus:border-blue-500 text-sm md:text-base"
+                    // className="flex-1 px-3 py-1.5 md:px-4 md:py-2 rounded-full border shadow-md text-white focus:outline-none focus:border-blue-500 text-sm md:text-base"
+                    className=" bg-white border py-1.5 px-3 rounded-full shadow-md border-black w-full"
                   />
                   <button
                     type="submit"
                     disabled={!newMessage.trim()}
                     className="bg-blue-500 text-white rounded-full p-1.5 md:p-2 hover:bg-blue-600 disabled:opacity-50"
                   >
-                    <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {/* <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                    </svg>
+                    </svg> */}
+                    <svg   className="w-5 h-5 md:w-6 md:h-6 text-white" fill="currentColor"   viewBox="0 0 24 24">
+                          <path  d="M21.999 2.935a1.285 1.285 0 0 0-1.304-.161L2.433 10.276a1.28 1.28 0 0 0-.047 2.346l4.31 2.17 1.843 5.718a1.282 1.282 0 0 0 2.015.636l3.06-2.574 4.192 3.29a1.28 1.28 0 0 0 2.062-.905l2.068-16.482a1.285 1.285 0 0 0-.337-1.07zM16.92 19.039l-3.928-3.078a.641.641 0 0 0-.812.023l-2.745 2.308-1.533-4.755 9.682-6.498-7.644 7.067-5.02-2.523 16.338-6.983-2.338 14.439z"/>
+                          </svg>
+
                   </button>
                 </form>
               </div>
@@ -546,7 +551,7 @@ const Chat = () => {
                 <svg className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-2 md:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                 </svg>
-                <p className="text-base md:text-xl font-semibold">Select a conversation to start chatting</p>
+                <p className="text-base md:text-xl font-semibold">Select a conversation to message</p>
               </div>
             </div>
           )}
