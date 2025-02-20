@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 // const BACKEND_URL = "https://chat-prashant-sharmas-projects-5c78faa6.vercel.";
 // const BACKEND_URL = "http://localhost:4545";
-const BACKEND_URL = "https://chat-phi-lake-18.vercel.app/";
+const BACKEND_URL = "https://chat-phi-lake-18.vercel.app";
 
 const Chat = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -35,7 +35,10 @@ const Chat = () => {
       return;
     }
 
+    // socketRef.current = io(BACKEND_URL, {
     socketRef.current = io("https://chat-phi-lake-18.vercel.app", {
+      transports: ['websocket','polling'],
+      withCredentials: true,
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000
@@ -102,7 +105,13 @@ const Chat = () => {
     try {
       if (!currentUser?._id) return;
       
-      const response = await fetch(`${BACKEND_URL}/api/unread-count/${currentUser._id}`);
+      const response = await fetch(`${BACKEND_URL}/api/unread-count/${currentUser._id}`{
+        method: 'GET',
+        credentials: 'include', // Allow cookies/session
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const counts = await response.json();
       const countsMap = counts.reduce((acc, { _id, count }) => {
@@ -119,7 +128,13 @@ const Chat = () => {
     try {
       if (!currentUser?._id || !userId) return;
 
-      const response = await fetch(`${BACKEND_URL}/api/messages/${currentUser._id}/${userId}`);
+      const response = await fetch(`${BACKEND_URL}/api/messages/${currentUser._id}/${userId}`,{
+        method: 'GET',
+        credentials: 'include', // Allow cookies/session
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       setMessages(data);
