@@ -228,7 +228,7 @@ const Chat = () => {
 
 
   // const BACKEND_URL = "http://localhost:4545"
-  const BACKEND_URL = "https://chat-phi-lake-18.vercel.app"
+  const BACKEND_URL = "https://chat-server-application.onrender.com"
   
   // Auto-scroll to bottom of messages
   const scrollToBottom = () => {
@@ -248,6 +248,7 @@ const Chat = () => {
 
     // Initialize socket connection
     socketRef.current = io(BACKEND_URL, {
+      withCredentials:true,
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000
